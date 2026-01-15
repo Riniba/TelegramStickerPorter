@@ -5,9 +5,7 @@ public class Startup : AppStartup
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddLoggingSetup();
-
         services.AddConsoleFormatter();
-
         services.AddControllers()
                 .AddInjectWithUnifyResult();
         services.AddSchedule(options =>

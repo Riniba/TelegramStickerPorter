@@ -10,3 +10,4 @@ global using Telegram.Bot.Types.Enums;
 global using Telegram.Bot.Types.ReplyMarkups;
 global using TelegramStickerPorter;
 global using WTelegram;
+global using Furion.ConfigurableOptions;

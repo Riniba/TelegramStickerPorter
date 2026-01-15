@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
 	<PropertyGroup>
-		<TargetFramework>net9.0</TargetFramework>
+		<TargetFramework>net10.0</TargetFramework>
 		<Nullable>disable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<NoWarn>1701;1702;1591</NoWarn>
@@ -14,10 +14,10 @@
 		<DebugSymbols>false</DebugSymbols>
 	</PropertyGroup>
 	<ItemGroup>
-		<PackageReference Include="Furion.Extras.ObjectMapper.Mapster" Version="4.9.7.129" />
-		<PackageReference Include="Furion.Pure" Version="4.9.7.129" />
-		<PackageReference Include="WTelegramBot" Version="9.2.0" />
-		<PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.9" />
+		<PackageReference Include="Furion.Extras.ObjectMapper.Mapster" Version="4.9.7.247" />
+		<PackageReference Include="Furion.Pure" Version="4.9.7.247" />
+		<PackageReference Include="WTelegramBot" Version="9.3.0" />
+		<PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.2" />
 	</ItemGroup>
 
 </Project>

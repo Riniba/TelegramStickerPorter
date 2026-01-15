@@ -1,20 +1,20 @@
 ﻿namespace TelegramStickerPorter;
 
-public class TelegramBotBackgroundService : BackgroundService
+public class TelegramBotService : BackgroundService
 {
-    private readonly TelegramBotClientManager _telegramBotClientManager;
-    private readonly ILogger<TelegramBotBackgroundService> _logger;
+    private readonly ILogger<TelegramBotService> _logger;
     private readonly StickerService _stickerService;
     private readonly SemaphoreSlim _restartLock = new(1, 1);
+    private readonly TelegramOptions _options;
+    private Bot _bot;
 
-    public TelegramBotBackgroundService(
-        ILogger<TelegramBotBackgroundService> logger,
-        TelegramBotClientManager telegramBotClientManager,
+    public TelegramBotService(
+        ILogger<TelegramBotService> logger,
         StickerService stickerService)
     {
         _logger = logger;
-        _telegramBotClientManager = telegramBotClientManager;
         _stickerService = stickerService;
+        _options = App.GetConfig<TelegramOptions>("Telegram") ?? throw Oops.Oh("未在配置中找到 Telegram 节点");
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -42,8 +42,62 @@ public class TelegramBotBackgroundService : BackgroundService
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("正在停止机器人后台服务");
-        _telegramBotClientManager.StopBot();
+        StopBot();
         await base.StopAsync(cancellationToken);
+    }
+
+    public bool HasActiveBot
+    {
+        get
+        {
+            return _bot != null;
+        }
+    }
+
+    public void StopBot()
+    {
+        if (_bot == null) return;
+
+        try
+        {
+            _bot.Dispose();
+            _logger.LogInformation("机器人实例已释放");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "释放机器人实例时出错");
+        }
+        finally
+        {
+            _bot = null;
+        }
+    }
+
+    public async Task<bool> CanPingTelegramAsync()
+    {
+        var bot = _bot;
+
+        if (bot == null)
+        {
+            _logger.LogWarning("机器人实例不存在，无法检测连接");
+            return false;
+        }
+
+        try
+        {
+            var cmds = await bot.GetMyCommands();
+            return cmds != null;
+        }
+        catch (ObjectDisposedException)
+        {
+            _logger.LogWarning("机器人实例已被释放，无法检测连接");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "检测机器人连接失败");
+            return false;
+        }
     }
 
     private async Task InitializeInternalAsync(bool forceRestart, CancellationToken cancellationToken)
@@ -51,14 +105,14 @@ public class TelegramBotBackgroundService : BackgroundService
         await _restartLock.WaitAsync(cancellationToken);
         try
         {
-            if (!forceRestart && _telegramBotClientManager.HasActiveBot)
+            if (!forceRestart && HasActiveBot)
             {
                 _logger.LogDebug("检测到机器人已在线，跳过初始化");
                 return;
             }
 
             _logger.LogInformation(forceRestart ? "正在重新初始化机器人..." : "正在初始化机器人...");
-            var bot = _telegramBotClientManager.CreateBot();
+            var bot = CreateBot();
             var me = await bot.GetMe();
             _logger.LogInformation($"机器人启动: @{me.Username}");
 
@@ -151,6 +205,33 @@ public class TelegramBotBackgroundService : BackgroundService
         else if (text.StartsWith("/info"))
         {
             await _stickerService.SendStickerInfoAsync(bot, msg);
+        }
+    }
+
+    private Bot CreateBot()
+    {
+        try
+        {
+            StopBot();
+
+            var basePath = AppContext.BaseDirectory;
+            var dbPath = Path.Combine(basePath, "TelegramBot.sqlite");
+            var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={dbPath}");
+
+            _bot = new Bot(
+                _options.BotToken,
+                _options.ApiId,
+                _options.ApiHash,
+                connection,
+                SqlCommands.Sqlite);
+
+            _logger.LogInformation("创建新机器人实例成功");
+            return _bot;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "创建机器人实例失败");
+            throw Oops.Oh(ex, "启动机器人时发生错误");
         }
     }
 }

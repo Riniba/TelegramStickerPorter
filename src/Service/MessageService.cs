@@ -19,9 +19,6 @@ public class MessageService
     {
         try
         {
-            if (bot == null)
-                throw new ArgumentNullException(nameof(bot));
-
             if (string.IsNullOrEmpty(messageText))
                 return 0;
 
@@ -55,9 +52,6 @@ public class MessageService
     {
         try
         {
-            if (bot == null)
-                throw new ArgumentNullException(nameof(bot));
-
             if (string.IsNullOrEmpty(messageText))
                 return;
 
