@@ -14,7 +14,7 @@ permissions:
   packages: write
 
 env:
-  DOTNET_VERSION: '9.0.x'
+  DOTNET_VERSION: '10.0.x'
   CONFIGURATION: Release
   PROJECT_PATH: 'src/TelegramStickerPorter.csproj'
   IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/telegramstickerporter
@@ -50,21 +50,18 @@ jobs:
     strategy:
       matrix:
         include:
-          
-          - { name: linux-x64,      rid: linux-x64,   arch: amd64, artifact: TelegramStickerPorter-linux-x64.tar.gz,  pack: "tar -czf", docker: true }
-          - { name: linux-arm64,    rid: linux-arm64, arch: arm64, artifact: TelegramStickerPorter-linux-arm64.tar.gz,pack: "tar -czf", docker: true }
-          
-          - { name: osx-x64,        rid: osx-x64,     artifact: TelegramStickerPorter-osx-x64.zip,       pack: "zip -r -q", docker: false }
-          - { name: osx-arm64,      rid: osx-arm64,   artifact: TelegramStickerPorter-osx-arm64.zip,     pack: "zip -r -q", docker: false }
-          
-          - { name: windows-x86,    rid: win-x86,     artifact: TelegramStickerPorter-windows-x86.zip,   pack: "zip -r -q", docker: false }
-          - { name: windows-x64,    rid: win-x64,     artifact: TelegramStickerPorter-windows-x64.zip,   pack: "zip -r -q", docker: false }
-          - { name: windows-arm64,  rid: win-arm64,   artifact: TelegramStickerPorter-windows-arm64.zip,pack: "zip -r -q", docker: false }
+          - { name: linux-x64, rid: linux-x64, arch: amd64, artifact: TelegramStickerPorter-linux-x64.tar.gz, pack: "tar -czf", docker: true }
+          - { name: linux-arm64, rid: linux-arm64, arch: arm64, artifact: TelegramStickerPorter-linux-arm64.tar.gz, pack: "tar -czf", docker: true }
+          - { name: osx-x64, rid: osx-x64, artifact: TelegramStickerPorter-osx-x64.zip, pack: "zip -r -q", docker: false }
+          - { name: osx-arm64, rid: osx-arm64, artifact: TelegramStickerPorter-osx-arm64.zip, pack: "zip -r -q", docker: false }
+          - { name: windows-x86, rid: win-x86, artifact: TelegramStickerPorter-windows-x86.zip, pack: "zip -r -q", docker: false }
+          - { name: windows-x64, rid: win-x64, artifact: TelegramStickerPorter-windows-x64.zip, pack: "zip -r -q", docker: false }
+          - { name: windows-arm64, rid: win-arm64, artifact: TelegramStickerPorter-windows-arm64.zip, pack: "zip -r -q", docker: false }
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       - name: Publish
@@ -104,11 +101,9 @@ jobs:
           path: .
       - name: Prepare binaries
         run: |
-          
           tar -xzf out/linux-amd64/TelegramStickerPorter-linux-x64.tar.gz -C out/linux-amd64 --strip-components=1
           chmod +x out/linux-amd64/TelegramStickerPorter
-          
-          
+
           tar -xzf out/linux-arm64/TelegramStickerPorter-linux-arm64.tar.gz -C out/linux-arm64 --strip-components=1
           chmod +x out/linux-arm64/TelegramStickerPorter
       - uses: docker/setup-qemu-action@v3
@@ -123,8 +118,7 @@ jobs:
       - name: Build and push multi-platform image
         run: |
           IMAGE_NAME_LC=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
-          
-          
+
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
             --build-arg BIN_NAME=TelegramStickerPorter \
@@ -137,8 +131,7 @@ jobs:
             -t $IMAGE_NAME_LC:latest \
             -t $IMAGE_NAME_LC:${{ steps.ver.outputs.VERSION }} \
             .
-          
-          
+
           echo "=== Verifying multi-platform manifest ==="
           docker buildx imagetools inspect $IMAGE_NAME_LC:latest
           docker buildx imagetools inspect $IMAGE_NAME_LC:${{ steps.ver.outputs.VERSION }}
@@ -174,17 +167,17 @@ jobs:
             macOS (Intel / Apple Silicon)  
 
             Windows 用户请下载对应系统架构的 zip 文件  
-            • 64 位系统：`TelegramStickerPorter-windows-x64.zip`  
-            • 32 位系统：`TelegramStickerPorter-windows-x86.zip`  
-            • ARM64 系统：`TelegramStickerPorter-windows-arm64.zip`  
+            - 64 位系统：`TelegramStickerPorter-windows-x64.zip`  
+            - 32 位系统：`TelegramStickerPorter-windows-x86.zip`  
+            - ARM64 系统：`TelegramStickerPorter-windows-arm64.zip`  
 
             Linux 用户请下载对应架构的 tar.gz 文件  
-            • x64 架构：`TelegramStickerPorter-linux-x64.tar.gz`  
-            • ARM64 架构：`TelegramStickerPorter-linux-arm64.tar.gz`  
+            - x64 架构：`TelegramStickerPorter-linux-x64.tar.gz`  
+            - ARM64 架构：`TelegramStickerPorter-linux-arm64.tar.gz`  
 
             macOS 用户请下载对应架构的 zip 文件  
-            • Intel 芯片：`TelegramStickerPorter-osx-x64.zip`  
-            • Apple Silicon：`TelegramStickerPorter-osx-arm64.zip`
+            - Intel 芯片：`TelegramStickerPorter-osx-x64.zip`  
+            - Apple Silicon：`TelegramStickerPorter-osx-arm64.zip`
           files: |
             artifacts/**/*.zip
             artifacts/**/*.tar.gz

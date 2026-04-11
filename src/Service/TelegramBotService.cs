@@ -1,12 +1,14 @@
-﻿namespace TelegramStickerPorter;
+namespace TelegramStickerPorter;
 
 public class TelegramBotService : BackgroundService
 {
     private readonly ILogger<TelegramBotService> _logger;
     private readonly StickerService _stickerService;
     private readonly SemaphoreSlim _restartLock = new(1, 1);
+    private readonly object _botSync = new();
     private readonly TelegramOptions _options;
     private Bot _bot;
+    private bool _hasCompletedInitialStartup;
 
     public TelegramBotService(
         ILogger<TelegramBotService> logger,
@@ -46,36 +48,17 @@ public class TelegramBotService : BackgroundService
         await base.StopAsync(cancellationToken);
     }
 
-    public bool HasActiveBot
-    {
-        get
-        {
-            return _bot != null;
-        }
-    }
+    public bool HasActiveBot => GetCurrentBot() != null;
 
     public void StopBot()
     {
-        if (_bot == null) return;
-
-        try
-        {
-            _bot.Dispose();
-            _logger.LogInformation("机器人实例已释放");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "释放机器人实例时出错");
-        }
-        finally
-        {
-            _bot = null;
-        }
+        var botToStop = SwapBot(null);
+        StopBotInstance(botToStop);
     }
 
     public async Task<bool> CanPingTelegramAsync()
     {
-        var bot = _bot;
+        var bot = GetCurrentBot();
 
         if (bot == null)
         {
@@ -103,6 +86,8 @@ public class TelegramBotService : BackgroundService
     private async Task InitializeInternalAsync(bool forceRestart, CancellationToken cancellationToken)
     {
         await _restartLock.WaitAsync(cancellationToken);
+        Bot candidateBot = null;
+
         try
         {
             if (!forceRestart && HasActiveBot)
@@ -112,19 +97,28 @@ public class TelegramBotService : BackgroundService
             }
 
             _logger.LogInformation(forceRestart ? "正在重新初始化机器人..." : "正在初始化机器人...");
-            var bot = CreateBot();
-            var me = await bot.GetMe();
-            _logger.LogInformation($"机器人启动: @{me.Username}");
 
-            await ConfigureBotAsync(bot);
+            candidateBot = CreateBot();
+            var me = await candidateBot.GetMe();
+            _logger.LogInformation("机器人启动: @{Username}", me.Username);
+
+            var dropPendingUpdates = _options.DropPendingUpdatesOnStartup && !_hasCompletedInitialStartup;
+            await ConfigureBotAsync(candidateBot, dropPendingUpdates);
+
+            var previousBot = SwapBot(candidateBot);
+            candidateBot = null;
+            StopBotInstance(previousBot);
+
+            _hasCompletedInitialStartup = true;
         }
         finally
         {
+            StopBotInstance(candidateBot);
             _restartLock.Release();
         }
     }
 
-    private async Task ConfigureBotAsync(Bot bot)
+    private async Task ConfigureBotAsync(Bot bot, bool dropPendingUpdates)
     {
         var commands = new[]
         {
@@ -134,12 +128,20 @@ public class TelegramBotService : BackgroundService
 
         foreach (var cmd in commands)
         {
-            _logger.LogInformation($"命令：{cmd.Command} 描述：{cmd.Description}");
+            _logger.LogInformation("命令：{Command} 描述：{Description}", cmd.Command, cmd.Description);
         }
 
         await bot.SetMyCommands(commands, new BotCommandScopeAllPrivateChats());
-        await bot.DropPendingUpdates();
-        _logger.LogInformation("机器人丢弃未处理的更新");
+
+        if (dropPendingUpdates)
+        {
+            await bot.DropPendingUpdates();
+            _logger.LogInformation("机器人已按配置丢弃首次启动前的未处理更新");
+        }
+        else
+        {
+            _logger.LogInformation("机器人保留未处理的更新");
+        }
 
         ConfigureErrorHandling(bot);
         ConfigureMessageHandling(bot);
@@ -150,7 +152,7 @@ public class TelegramBotService : BackgroundService
         bot.WantUnknownTLUpdates = true;
         bot.OnError += (e, s) =>
         {
-            _logger.LogError($"机器人错误: {e}");
+            _logger.LogError("机器人错误: {Error}", e);
             return Task.CompletedTask;
         };
     }
@@ -181,11 +183,11 @@ public class TelegramBotService : BackgroundService
         if (update.Type != UpdateType.Unknown) return;
 
         if (update.TLUpdate is TL.UpdateDeleteChannelMessages udcm)
-            _logger.LogInformation($"{udcm.messages.Length} 条消息被删除，来源：{bot.Chat(udcm.channel_id)?.Title}");
+            _logger.LogInformation("{Count} 条消息被删除，来源：{Source}", udcm.messages.Length, bot.Chat(udcm.channel_id)?.Title);
         else if (update.TLUpdate is TL.UpdateDeleteMessages udm)
-            _logger.LogInformation($"{udm.messages.Length} 条消息被删除，来源：用户或小型私聊群组");
+            _logger.LogInformation("{Count} 条消息被删除，来源：用户或小型私聊群组", udm.messages.Length);
         else if (update.TLUpdate is TL.UpdateReadChannelOutbox urco)
-            _logger.LogInformation($"某人阅读了 {bot.Chat(urco.channel_id)?.Title} 的消息，直到消息 ID: {urco.max_id}");
+            _logger.LogInformation("某人阅读了 {Source} 的消息，直到消息 ID: {MessageId}", bot.Chat(urco.channel_id)?.Title, urco.max_id);
     }
 
     private async Task HandlePrivateAsync(Bot bot, WTelegram.Types.Message msg)
@@ -212,13 +214,11 @@ public class TelegramBotService : BackgroundService
     {
         try
         {
-            StopBot();
-
             var basePath = AppContext.BaseDirectory;
             var dbPath = Path.Combine(basePath, "TelegramBot.sqlite");
             var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={dbPath}");
 
-            _bot = new Bot(
+            var bot = new Bot(
                 _options.BotToken,
                 _options.ApiId,
                 _options.ApiHash,
@@ -226,12 +226,45 @@ public class TelegramBotService : BackgroundService
                 SqlCommands.Sqlite);
 
             _logger.LogInformation("创建新机器人实例成功");
-            return _bot;
+            return bot;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "创建机器人实例失败");
             throw Oops.Oh(ex, "启动机器人时发生错误");
+        }
+    }
+
+    private Bot GetCurrentBot()
+    {
+        lock (_botSync)
+        {
+            return _bot;
+        }
+    }
+
+    private Bot SwapBot(Bot newBot)
+    {
+        lock (_botSync)
+        {
+            var previousBot = _bot;
+            _bot = newBot;
+            return previousBot;
+        }
+    }
+
+    private void StopBotInstance(Bot bot)
+    {
+        if (bot == null) return;
+
+        try
+        {
+            bot.Dispose();
+            _logger.LogInformation("机器人实例已释放");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "释放机器人实例时出错");
         }
     }
 }

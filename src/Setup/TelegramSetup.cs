@@ -6,9 +6,11 @@ public static class TelegramSetup
     {
         ConfigureWTelegramLogging();
         services.AddConfigurableOptions<TelegramOptions>();
+        services.AddConfigurableOptions<TelegramMessagesOptions>();
         services.AddSingleton<TelegramBotService>();
         services.AddHostedService(sp => sp.GetRequiredService<TelegramBotService>());
         services.AddSingleton<MessageService>();
+        services.AddSingleton<TelegramMessageTemplateService>();
         services.AddSingleton<StickerService>();
 
         return services;
