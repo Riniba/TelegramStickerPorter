@@ -4,6 +4,8 @@
 > 支持 **贴纸包搬运**、**表情包克隆**，一键转移，极简操作！
 >
 > 演示机器人 [@StickerPorter_Bot](https://t.me/StickerPorter_Bot)
+>
+> 加强版机器人（收费版本） [@StickerPorterPro_Bot](https://t.me/StickerPorterPro_Bot)
 
 ------
 
