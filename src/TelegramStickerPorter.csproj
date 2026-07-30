@@ -14,10 +14,10 @@
 		<DebugSymbols>false</DebugSymbols>
 	</PropertyGroup>
 	<ItemGroup>
-		<PackageReference Include="Furion" Version="4.9.9.23" />
-		<PackageReference Include="Furion.Extras.ObjectMapper.Mapster" Version="4.9.9.23" />
+		<PackageReference Include="Furion" Version="4.9.9.47" />
+		<PackageReference Include="Furion.Extras.ObjectMapper.Mapster" Version="4.9.9.47" />
 		<PackageReference Include="WTelegramBot" Version="10.1.0" />
-		<PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
+		<PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
 	</ItemGroup>
 
 </Project>
